@@ -1,0 +1,336 @@
+if not game:IsLoaded() then game.Loaded:Wait() end
+local lp = game:GetService("Players").LocalPlayer
+local pgui = lp:WaitForChild("PlayerGui")
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+local TS = game:GetService("TweenService")
+local PathService = game:GetService("PathfindingService")
+
+-- Очистка старых версий и старых путей
+for _, v in pairs(pgui:GetChildren()) do
+    if v.Name:find("Zmey") then v:Destroy() end
+end
+
+-- Папка для путей
+local pathFolder = workspace:FindFirstChild("ZmeyPathFolder") or Instance.new("Folder", workspace)
+pathFolder.Name = "ZmeyPathFolder"
+
+local function clearPathVisuals()
+    pathFolder:ClearAllChildren()
+end
+
+_G.Config = {Bot = false, TP = false, ESP = false, Scale = 1, Eggs = 0}
+
+local sg = Instance.new("ScreenGui", pgui)
+sg.Name = "ZmeyV3_9_Final"; sg.ResetOnSpawn = false; sg.DisplayOrder = 100
+
+-- === ИКОНКА (ЗМЕЙКА) ===
+local appBtn = Instance.new("TextButton", sg)
+appBtn.Name = "AppIcon"; appBtn.Size = UDim2.new(0, 45, 0, 45); appBtn.Position = UDim2.new(0, 20, 0.5, -22)
+appBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25); appBtn.Text = ""; appBtn.BorderSizePixel = 0
+appBtn.ClipsDescendants = true; appBtn.Active = true 
+Instance.new("UICorner", appBtn).CornerRadius = UDim.new(1, 0)
+
+local appSnake = Instance.new("TextLabel", appBtn)
+appSnake.Size = UDim2.new(0.7, 0, 0.7, 0); appSnake.Position = UDim2.new(0.15, 0, 0.15, 0)
+appSnake.Text = "🐍"; appSnake.TextScaled = true; appSnake.BackgroundTransparency = 1
+
+local appStroke = Instance.new("UIStroke", appBtn)
+appStroke.Color = Color3.new(0, 1, 0.5); appStroke.Thickness = 2
+
+-- === ГЛАВНАЯ ПАНЕЛЬ ===
+local main = Instance.new("Frame", sg)
+main.Visible = false; main.ClipsDescendants = true; main.Active = true 
+main.Size = UDim2.new(0, 150, 0, 235); main.Position = UDim2.new(0.5, -75, 0.5, -117)
+main.BackgroundColor3 = Color3.fromRGB(18, 18, 18); main.BorderSizePixel = 0
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 8)
+
+local mainStroke = Instance.new("UIStroke", main)
+mainStroke.Thickness = 1.5; mainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+-- RGB Обводка
+task.spawn(function()
+    local h = 0
+    while task.wait(0.05) do
+        h = h + 1/255; if h > 1 then h = 0 end
+        mainStroke.Color = Color3.fromHSV(h, 0.8, 1)
+    end
+end)
+
+-- Функция открытия/закрытия
+local function toggleMenu()
+    if main.Visible then
+        local tw = TS:Create(main, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1})
+        tw:Play(); tw.Completed:Wait(); main.Visible = false
+    else
+        main.Size = UDim2.new(0,0,0,0); main.BackgroundTransparency = 1; main.Visible = true
+        local targetSize = UDim2.new(0, 150 * _G.Config.Scale, 0, 235 * (1 + (_G.Config.Scale - 0.8)*0.2))
+        TS:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = targetSize, BackgroundTransparency = 0}):Play()
+    end
+end
+appBtn.MouseButton1Click:Connect(toggleMenu)
+
+local header = Instance.new("Frame", main)
+header.Size = UDim2.new(1, 0, 0, 35); header.Position = UDim2.new(0, 0, 0, 0); header.BackgroundTransparency = 1; header.Active = true
+
+local titleSnake = Instance.new("TextLabel", header)
+titleSnake.Size = UDim2.new(0, 22, 0, 22); titleSnake.Position = UDim2.new(0, 8, 0, 6)
+titleSnake.Text = "🐍"; titleSnake.TextScaled = true; titleSnake.BackgroundTransparency = 1
+
+local title = Instance.new("TextLabel", header)
+title.Size = UDim2.new(0.65, 0, 0.8, 0); title.Position = UDim2.new(0, 35, 0.1, 0)
+title.Text = "Zmey 3.9V"; title.TextColor3 = Color3.new(1, 1, 1); title.BackgroundTransparency = 1
+title.Font = "GothamBold"; title.TextScaled = true; title.TextXAlignment = "Left"
+
+-- Создание кнопок
+local function createBtn(txt, key, y)
+    local b = Instance.new("TextButton", main)
+    b.Size = UDim2.new(0.85, 0, 0, 30); b.Position = UDim2.new(0.075, 0, 0, y)
+    b.Text = txt; b.BackgroundColor3 = Color3.fromRGB(35, 35, 35); b.TextColor3 = Color3.new(1, 1, 1)
+    b.Font = "Gotham"; b.TextSize = 11; Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+    b.MouseButton1Click:Connect(function()
+        _G.Config[key] = not _G.Config[key]
+        local targetCol = _G.Config[key] and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(35, 35, 35)
+        TS:Create(b, TweenInfo.new(0.2), {BackgroundColor3 = targetCol}):Play()
+        if not _G.Config.Bot then clearPathVisuals() end
+    end)
+end
+
+createBtn("AUTO FARM", "Bot", 45)
+createBtn("TP MODE", "TP", 80)
+createBtn("ESP VIEW", "ESP", 115)
+
+-- Счетчик
+local collectedCount = Instance.new("TextLabel", main)
+collectedCount.Size = UDim2.new(0.85, 0, 0, 20); collectedCount.Position = UDim2.new(0.075, 0, 0, 150)
+collectedCount.Text = "COLLECTED: 0"; collectedCount.TextColor3 = Color3.new(1, 0.8, 0)
+collectedCount.BackgroundTransparency = 1; collectedCount.Font = "GothamBold"; collectedCount.TextSize = 10; collectedCount.TextXAlignment = "Left"
+
+-- Ползунок масштаба
+local sBar = Instance.new("Frame", main)
+sBar.Size = UDim2.new(0.75, 0, 0, 6); sBar.Position = UDim2.new(0.125, 0, 0, 200); sBar.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+Instance.new("UICorner", sBar)
+local sDot = Instance.new("TextButton", sBar)
+sDot.Size = UDim2.new(0, 10, 2.2, 0); sDot.Position = UDim2.new(0.28, -5, -0.6, 0); sDot.Text = ""; sDot.BackgroundColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", sDot).CornerRadius = UDim.new(1, 0)
+
+sDot.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+        local move; move = RS.RenderStepped:Connect(function()
+            local rel = math.clamp((UIS:GetMouseLocation().X - sBar.AbsolutePosition.X) / sBar.AbsoluteSize.X, 0, 1)
+            sDot.Position = UDim2.new(rel, -5, -0.6, 0)
+            _G.Config.Scale = 0.8 + (rel * 0.7)
+            main.Size = UDim2.new(0, 150 * _G.Config.Scale, 0, 235 * (1 + (rel * 0.15)))
+            
+            if _G.Config.Scale >= 1 then
+                title.Text = "Zmey.hub 3.9V"
+            else
+                title.Text = "Zmey 3.9V"
+            end
+        end)
+        UIS.InputEnded:Connect(function(i2) if i2.UserInputType == Enum.UserInputType.MouseButton1 or i2.UserInputType == Enum.UserInputType.Touch then move:Disconnect() end end)
+    end
+end)
+
+-- Drag & Drop
+local function makeDraggable(obj, target)
+    local dSt, sPs, drg
+    obj.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drg = true; dSt = i.Position; sPs = target.Position end end)
+    UIS.InputChanged:Connect(function(i) if drg and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then local delta = i.Position - dSt; target.Position = UDim2.new(sPs.X.Scale, sPs.X.Offset + delta.X, sPs.Y.Scale, sPs.Y.Offset + delta.Y) end end)
+    UIS.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drg = false end end)
+end
+makeDraggable(appBtn, appBtn); makeDraggable(header, main)
+
+-- ESP ENGINE
+local function getSmartName(obj)
+    local n = obj.Name:lower()
+    if n:find("egg") then return "🥚 Egg" end
+    if n:find("potion") then return "🧪 Potion" end
+    if n:find("aura") then return "✨ Aura" end
+    return obj.Name
+end
+
+local function applyESP(v)
+    if v:FindFirstChild("ZmeyESP") then return end
+    local interact = v:FindFirstChildWhichIsA("ClickDetector", true) or v:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if not interact then return end 
+    local part = v:IsA("BasePart") and v or v:FindFirstChildWhichIsA("BasePart", true)
+    if not part then return end
+
+    local high = Instance.new("Highlight", v)
+    high.Name = "ZmeyESP"; high.FillColor = Color3.new(0, 1, 0.5); high.DepthMode = "AlwaysOnTop"
+    local bill = Instance.new("BillboardGui", v); bill.Name = "ZmeyTag"; bill.AlwaysOnTop = true; bill.Size = UDim2.new(0, 100, 0, 50); bill.ExtentsOffset = Vector3.new(0, 1.5, 0)
+    local txt = Instance.new("TextLabel", bill); txt.BackgroundTransparency = 1; txt.Size = UDim2.new(1, 0, 1, 0); txt.TextColor3 = Color3.new(1, 1, 1); txt.Font = "GothamBold"; txt.TextSize = 10; txt.TextStrokeTransparency = 0.5
+
+    task.spawn(function()
+        while v and v.Parent and _G.Config.ESP do
+            if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+                local d = math.floor((lp.Character.HumanoidRootPart.Position - part.Position).Magnitude)
+                txt.Text = getSmartName(v) .. "\n[" .. d .. "m]"
+                txt.TextColor3 = (d < 30 and Color3.new(0, 1, 0.4)) or (d < 80 and Color3.new(1, 1, 0)) or Color3.new(1, 1, 1)
+            end
+            task.wait(0.2)
+        end
+        if high then high:Destroy() end; if bill then bill:Destroy() end
+    end)
+end
+
+-- === [XT-SMART ENGINE: REBORN] ===
+
+local lastPos = Vector3.new(0,0,0)
+local ignoreList = {} 
+local targetAttempts = {}
+-- Переменные для Анти-Стена
+local bestDistance = math.huge
+local progressTimer = 0
+
+local function isGroundBelow(position)
+    local rayOrigin = position + Vector3.new(0, 2, 0)
+    local rayDirection = Vector3.new(0, -12, 0) 
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {lp.Character, pathFolder}
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    local result = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+    return result ~= nil
+end
+
+local function visualizePath(waypoints)
+    clearPathVisuals()
+    for i = 1, #waypoints - 1 do
+        local p1, p2 = waypoints[i].Position, waypoints[i+1].Position
+        local part = Instance.new("Part", pathFolder)
+        part.Name = "ZmeyPathPart"; part.Anchored = true; part.CanCollide = false
+        part.Material = Enum.Material.Neon; part.Color = Color3.fromRGB(0, 255, 255)
+        part.Size = Vector3.new(0.3, 0.3, (p1 - p2).Magnitude)
+        part.CFrame = CFrame.new(p1:Lerp(p2, 0.5), p2)
+    end
+end
+
+local function shouldJump(root)
+    local ray = Ray.new(root.Position, root.CFrame.LookVector * 5)
+    local hit = workspace:FindPartOnRayWithIgnoreList(ray, {lp.Character})
+    if hit and hit.CanCollide then return true end
+    return false
+end
+
+local function getNearestTarget()
+    local nearest, dist = nil, math.huge
+    for _, v in pairs(workspace:GetDescendants()) do
+        if ignoreList[v] then continue end
+        local n = v.Name:lower()
+        if (n:find("egg") or n:find("potion") or n:find("aura")) and not n:find("ink") then
+            if v:FindFirstChildWhichIsA("ClickDetector", true) or v:FindFirstChildWhichIsA("ProximityPrompt", true) then
+                local p = v:IsA("BasePart") and v or v:FindFirstChildWhichIsA("BasePart", true)
+                if p and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+                    local d = (lp.Character.HumanoidRootPart.Position - p.Position).Magnitude
+                    if d < dist then dist = d; nearest = v end
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+task.spawn(function()
+    while task.wait(0.05) do
+        if _G.Config.Bot and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+            local root = lp.Character.HumanoidRootPart
+            local hum = lp.Character.Humanoid
+            
+            local target = getNearestTarget()
+            if target then
+                local part = target:IsA("BasePart") and target or target:FindFirstChildWhichIsA("BasePart", true)
+                if part then
+                    local currentDist = (root.Position - part.Position).Magnitude
+                    
+                    -- === ЛОГИКА АНТИ-СТЕНА ===
+                    if currentDist < bestDistance - 1 then
+                        bestDistance = currentDist
+                        progressTimer = 0
+                    else
+                        progressTimer = progressTimer + 0.05
+                    end
+
+                    if progressTimer > 5 then -- Если за 5 секунд не приблизился к цели
+                        hum.Health = 0 -- Ресет
+                        progressTimer = 0
+                        bestDistance = math.huge
+                        targetAttempts[target] = (targetAttempts[target] or 0) + 1
+                        task.wait(2)
+                    end
+                    -- =========================
+
+                    if not targetAttempts[target] then targetAttempts[target] = 0 end
+                    
+                    local path = PathService:CreatePath({AgentCanJump = true, AgentRadius = 2, WaypointSpacing = 4})
+                    path:ComputeAsync(root.Position, part.Position)
+                    
+                    local wps = path:GetWaypoints()
+                    local validPath = path.Status == Enum.PathStatus.Success
+                    if validPath and #wps > 0 then
+                        if not isGroundBelow(wps[#wps].Position) then
+                            validPath = false
+                        end
+                    end
+
+                    if validPath then
+                        visualizePath(wps)
+                        local movePos = wps[math.min(3, #wps)]
+                        hum:MoveTo(movePos.Position)
+                        if movePos.Action == Enum.PathWaypointAction.Jump or shouldJump(root) then
+                            hum.Jump = true
+                        end
+                    else
+                        targetAttempts[target] = targetAttempts[target] + 1
+                        hum:MoveTo(part.Position)
+                    end
+                    
+                    -- Система игнора (3 попытки)
+                    if targetAttempts[target] >= 3 then
+                        ignoreList[target] = true
+                        clearPathVisuals()
+                    end
+
+                    -- Сбор
+                    if (root.Position - part.Position).Magnitude < 7 then
+                        local cd = target:FindFirstChildWhichIsA("ClickDetector", true)
+                        local pp = target:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        if cd then fireclickdetector(cd) end
+                        if pp then fireproximityprompt(pp) end
+                        
+                        local op = target.Parent
+                        task.spawn(function()
+                            while target and target.Parent == op do task.wait() end
+                            _G.Config.Eggs = _G.Config.Eggs + 1
+                            collectedCount.Text = "COLLECTED: " .. _G.Config.Eggs
+                            ignoreList[target] = nil
+                        end)
+                    end
+                end
+            else
+                clearPathVisuals()
+                bestDistance = math.huge
+            end
+        else
+            clearPathVisuals()
+        end
+    end
+end)
+
+-- ESP цикл
+task.spawn(function()
+    while task.wait(1) do
+        if _G.Config.ESP then
+            for _, v in pairs(workspace:GetDescendants()) do
+                local n = v.Name:lower()
+                if (v:IsA("Model") or v:IsA("BasePart")) and not v:IsDescendantOf(lp.Character) then
+                    if (n:find("egg") or n:find("potion") or n:find("aura")) and not n:find("ink") then
+                        applyESP(v)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+print("Zmey 3.9V: Reborn with Anti-Wall Loaded!")
