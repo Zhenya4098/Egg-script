@@ -1,41 +1,220 @@
-# Compiled Lua sources
-luac.out
+-- [[ ZMEY V15: PROFESSIONAL EDITION ]]
+-- Цельный код без сокращений для загрузки через loadstring
 
-# luarocks build files
-*.src.rock
-*.zip
-*.tar.gz
+local P = game.Players.LocalPlayer
+local W = game.Workspace
+local RunService = game:GetService("RunService")
 
-# Object files
-*.o
-*.os
-*.ko
-*.obj
-*.elf
+-- Инициализация настроек (сохраняются при перезапуске)
+_G.ZmeyConfig = _G.ZmeyConfig or {
+    Farm = false,
+    Esp = false,
+    EspDistance = 500,
+    Priority = "Auras", -- Приоритет сбора
+    PersonalOnly = true,
+    WalkingSpeed = 16 -- СКОРОСТЬ ИЗМЕНЕНА НА БЕЗОПАСНУЮ (16)
+}
 
-# Precompiled Headers
-*.gch
-*.pch
+_G.ZmeyStats = {
+    Potions = 0,
+    Points = 0,
+    Auras = 0,
+    Target = "None"
+}
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-*.def
-*.exp
+-- [[ 1. МОЩНЫЙ АНАЛИЗАТОР ]]
+local function GetItemData(obj)
+    if not obj or not obj:IsA("BasePart") then return nil end
+    local name = obj.Name:lower()
+    local data = {
+        Name = "Point Egg",
+        Color = Color3.fromRGB(255, 200, 50),
+        Type = "Points",
+        Priority = 1
+    }
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+    if name:find("pot") or name:find("potion") then
+        data.Name = "Potion Egg"
+        data.Color = Color3.fromRGB(50, 255, 50)
+        data.Type = "Potions"
+        data.Priority = 2
+    elseif name:find("aura") or obj.Name:find("?") then
+        data.Name = "Aura Egg"
+        data.Color = Color3.fromRGB(180, 50, 255)
+        data.Type = "Auras"
+        data.Priority = 3
+    end
+    return data
+end
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+-- [[ 2. УМНЫЙ ESP С ЦВЕТАМИ ДАЛЬНОСТИ ]]
+local function ApplyESP(obj)
+    if not obj:IsA("BasePart") or obj:FindFirstChild("ZmeyTag") then return end
+    local info = GetItemData(obj)
+    if not info then return end
 
+    local bbg = Instance.new("BillboardGui", obj)
+    bbg.Name = "ZmeyTag"
+    bbg.Size = UDim2.new(0, 150, 0, 50)
+    bbg.AlwaysOnTop = true
+    bbg.StudsOffset = Vector3.new(0, 2, 0)
+
+    local mainLabel = Instance.new("TextLabel", bbg)
+    mainLabel.Size = UDim2.new(1, 0, 0.6, 0)
+    mainLabel.BackgroundTransparency = 1
+    mainLabel.Font = "GothamBold"
+    mainLabel.TextSize = 14
+    mainLabel.Text = info.Name
+    mainLabel.TextColor3 = info.Color
+
+    local distLabel = Instance.new("TextLabel", bbg)
+    distLabel.Size = UDim2.new(1, 0, 0.4, 0)
+    distLabel.Position = UDim2.new(0, 0, 0.6, 0)
+    distLabel.BackgroundTransparency = 1
+    distLabel.Font = "Gotham"
+    distLabel.TextSize = 12
+
+    task.spawn(function()
+        while obj and obj.Parent do
+            if _G.ZmeyConfig.Esp and P.Character and P.Character:FindFirstChild("HumanoidRootPart") then
+                local mag = (P.Character.HumanoidRootPart.Position - obj.Position).Magnitude
+                bbg.Enabled = mag <= _G.ZmeyConfig.EspDistance
+                distLabel.Text = "[" .. math.floor(mag) .. "m]"
+                -- Цвет дальности
+                if mag < 50 then distLabel.TextColor3 = Color3.new(0, 1, 0)
+                elseif mag < 150 then distLabel.TextColor3 = Color3.new(1, 1, 0)
+                else distLabel.TextColor3 = Color3.new(1, 0, 0) end
+            else
+                bbg.Enabled = false
+            end
+            task.wait(0.2)
+        end
+    end)
+end
+
+-- [[ 3. ИНТЕРФЕЙС (СТИЛЬ XT-HUB) ]]
+if game.CoreGui:FindFirstChild("ZmeyV15_System") then game.CoreGui.ZmeyV15_System:Destroy() end
+local UI = Instance.new("ScreenGui", game.CoreGui); UI.Name = "ZmeyV15_System"
+
+local Main = Instance.new("Frame", UI)
+Main.Size = UDim2.new(0, 220, 0, 280)
+Main.Position = UDim2.new(0.1, 0, 0.5, -140)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+Main.BorderSizePixel = 0
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
+
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "ZMEY V15 | PRO"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = "GothamBold"
+Title.TextSize = 16
+Title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Instance.new("UICorner", Title)
+
+local function AddToggle(text, y, settingKey)
+    local btn = Instance.new("TextButton", Main)
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
+    btn.Position = UDim2.new(0.05, 0, 0, y)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    btn.Font = "GothamBold"
+    btn.TextSize = 12
+    Instance.new("UICorner", btn)
+
+    btn.MouseButton1Click:Connect(function()
+        _G.ZmeyConfig[settingKey] = not _G.ZmeyConfig[settingKey]
+    end)
+
+    task.spawn(function()
+        while UI.Parent do
+            local state = _G.ZmeyConfig[settingKey]
+            btn.Text = text .. ": " .. (state and "ON" or "OFF")
+            btn.TextColor3 = state and Color3.new(0, 1, 0) or Color3.new(1, 1, 1)
+            task.wait(0.5)
+        end
+    end)
+end
+
+AddToggle("AUTO FARM", 50, "Farm")
+AddToggle("SMART ESP", 90, "Esp")
+AddToggle("PERSONAL ONLY", 130, "PersonalOnly")
+
+local StatBox = Instance.new("TextLabel", Main)
+StatBox.Size = UDim2.new(0.9, 0, 0, 80)
+StatBox.Position = UDim2.new(0.05, 0, 0, 180)
+StatBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+StatBox.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+StatBox.Font = "Gotham"
+StatBox.TextSize = 12
+StatBox.TextYAlignment = "Top"
+Instance.new("UICorner", StatBox)
+
+-- [[ 4. ENGINE: УМНЫЙ БОТ ]]
+task.spawn(function()
+    while task.wait(0.2) do
+        if _G.ZmeyConfig.Farm and P.Character and P.Character:FindFirstChild("HumanoidRootPart") then
+            local root = P.Character.HumanoidRootPart
+            local target, bestPriority, minDist = nil, -1, math.huge
+            
+            local drops = W:FindFirstChild("Drops")
+            if drops then
+                for _, item in pairs(drops:GetChildren()) do
+                    if item:IsA("BasePart") then
+                        local data = GetItemData(item)
+                        if data then
+                            -- Проверка владельца
+                            local canCollect = true
+                            if _G.ZmeyConfig.PersonalOnly then
+                                local owner = item:FindFirstChild("Owner")
+                                if owner and owner.Value ~= P.Name then canCollect = false end
+                            end
+
+                            if canCollect then
+                                local dist = (root.Position - item.Position).Magnitude
+                                -- Логика приоритетов (Сначала Аура, потом Зелье, потом Очки)
+                                if data.Priority > bestPriority then
+                                    bestPriority = data.Priority
+                                    minDist = dist
+                                    target = item
+                                elseif data.Priority == bestPriority and dist < minDist then
+                                    minDist = dist
+                                    target = item
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            if target then
+                _G.ZmeyStats.Target = target.Name
+                P.Character.Humanoid:MoveTo(target.Position)
+                
+                if (root.Position - target.Position).Magnitude < 8 then
+                    local d = GetItemData(target)
+                    if d and _G.ZmeyStats[d.Type] then
+                        _G.ZmeyStats[d.Type] = _G.ZmeyStats[d.Type] + 1
+                    end
+                    firetouchinterest(root, target, 0)
+                    task.wait(0.05)
+                    firetouchinterest(root, target, 1)
+                end
+            else
+                _G.ZmeyStats.Target = "Searching..."
+            end
+        end
+        
+        StatBox.Text = string.format(
+            "\nAuras: %d | Pots: %d\nPoints: %d\nTarget: %s",
+            _G.ZmeyStats.Auras, _G.ZmeyStats.Potions, _G.ZmeyStats.Points, _G.ZmeyStats.Target
+        )
+    end
+end)
+
+-- Авто-применение ESP
+if W:FindFirstChild("Drops") then
+    W.Drops.ChildAdded:Connect(ApplyESP)
+    for _, v in pairs(W.Drops:GetChildren()) do ApplyESP(v) end
+end
+
+print("🐍 ZMEY PRO LOADED (Safe Speed)!")
